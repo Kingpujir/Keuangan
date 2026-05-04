@@ -14,7 +14,6 @@ body {
   background: #f5f6fa;
 }
 
-/* HEADER */
 .header {
   background: linear-gradient(135deg,#4CAF50,#2ecc71);
   color: white;
@@ -23,7 +22,6 @@ body {
   border-bottom-right-radius: 20px;
 }
 
-/* SALDO */
 .balance {
   background: white;
   margin: -30px 15px 15px 15px;
@@ -32,11 +30,6 @@ body {
   box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
-.balance h1 {
-  margin: 5px 0;
-}
-
-/* CARD */
 .card {
   background: white;
   margin: 15px;
@@ -44,7 +37,6 @@ body {
   border-radius: 15px;
 }
 
-/* INPUT */
 input, select {
   width: 100%;
   padding: 10px;
@@ -61,10 +53,8 @@ button {
   color: white;
   border: none;
   border-radius: 10px;
-  font-size: 16px;
 }
 
-/* LIST */
 .item {
   display: flex;
   justify-content: space-between;
@@ -77,6 +67,13 @@ button {
 .small {
   font-size: 12px;
   color: gray;
+}
+
+.summary-item {
+  margin: 8px 0;
+  padding: 10px;
+  background: #f9f9f9;
+  border-radius: 8px;
 }
 </style>
 </head>
@@ -110,6 +107,11 @@ button {
 </div>
 
 <div class="card">
+  <h3>Ringkasan Bulanan</h3>
+  <div id="monthly"></div>
+</div>
+
+<div class="card">
   <h3>Riwayat</h3>
   <div id="list"></div>
 </div>
@@ -131,9 +133,22 @@ function render(){
   let list = document.getElementById("list");
   list.innerHTML = "";
 
+  let monthly = {};
+
   data.forEach((d,i)=>{
-    if(d.jenis==="income") income+=d.jumlah;
-    else expense+=d.jumlah;
+    let bulan = d.tanggal.slice(0,7); // YYYY-MM
+
+    if(!monthly[bulan]){
+      monthly[bulan] = {income:0, expense:0};
+    }
+
+    if(d.jenis==="income"){
+      income += d.jumlah;
+      monthly[bulan].income += d.jumlah;
+    } else {
+      expense += d.jumlah;
+      monthly[bulan].expense += d.jumlah;
+    }
 
     list.innerHTML += `
       <div class="item">
@@ -145,6 +160,20 @@ function render(){
           Rp ${rupiah(d.jumlah)}
           <br><button onclick="hapus(${i})">❌</button>
         </div>
+      </div>
+    `;
+  });
+
+  // tampil ringkasan bulanan
+  let monthlyDiv = document.getElementById("monthly");
+  monthlyDiv.innerHTML = "";
+
+  Object.keys(monthly).sort().reverse().forEach(bulan=>{
+    monthlyDiv.innerHTML += `
+      <div class="summary-item">
+        <b>${bulan}</b><br>
+        <span class="income">Pemasukan: Rp ${rupiah(monthly[bulan].income)}</span><br>
+        <span class="expense">Pengeluaran: Rp ${rupiah(monthly[bulan].expense)}</span>
       </div>
     `;
   });
