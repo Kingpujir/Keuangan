@@ -18,23 +18,19 @@ body {
   background: linear-gradient(135deg,#4CAF50,#2ecc71);
   color: white;
   padding: 20px;
-  border-bottom-left-radius: 20px;
-  border-bottom-right-radius: 20px;
+  border-radius: 0 0 20px 20px;
 }
 
-.balance {
-  background: white;
-  margin: -30px 15px 15px 15px;
-  padding: 15px;
-  border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-}
-
-.card {
+.balance, .card {
   background: white;
   margin: 15px;
   padding: 15px;
   border-radius: 15px;
+}
+
+.balance {
+  margin-top: -30px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 input, select {
@@ -68,13 +64,6 @@ button {
   font-size: 12px;
   color: gray;
 }
-
-.summary-item {
-  margin: 8px 0;
-  padding: 10px;
-  background: #f9f9f9;
-  border-radius: 8px;
-}
 </style>
 </head>
 
@@ -85,13 +74,13 @@ button {
 </div>
 
 <div class="balance">
-  <p>Saldo</p>
+  <h3>Saldo</h3>
   <h1 id="saldo">Rp 0</h1>
   <small>Pemasukan: Rp <span id="income">0</span> | Pengeluaran: Rp <span id="expense">0</span></small>
 </div>
 
 <div class="card">
-  <canvas id="chart"></canvas>
+  <canvas id="mainChart"></canvas>
 </div>
 
 <div class="card">
@@ -106,84 +95,24 @@ button {
   <button onclick="tambah()">Simpan</button>
 </div>
 
+<!-- 🔥 MENU BULANAN -->
 <div class="card">
-  <h3>Ringkasan Bulanan</h3>
-  <div id="monthly"></div>
-</div>
+  <h3>Detail Bulanan</h3>
+  <select id="bulanSelect" onchange="renderBulanan()"></select>
 
-<div class="card">
-  <h3>Riwayat</h3>
-  <div id="list"></div>
+  <p class="income">Pemasukan: Rp <span id="mIncome">0</span></p>
+  <p class="expense">Pengeluaran: Rp <span id="mExpense">0</span></p>
+
+  <canvas id="bulanChart"></canvas>
+
+  <div id="bulanList"></div>
 </div>
 
 <script>
 let data = JSON.parse(localStorage.getItem("keuangan")) || [];
 
-function rupiah(n){
-  return n.toLocaleString("id-ID");
-}
-
-function save(){
-  localStorage.setItem("keuangan", JSON.stringify(data));
-}
-
-function render(){
-  let income = 0;
-  let expense = 0;
-  let list = document.getElementById("list");
-  list.innerHTML = "";
-
-  let monthly = {};
-
-  data.forEach((d,i)=>{
-    let bulan = d.tanggal.slice(0,7); // YYYY-MM
-
-    if(!monthly[bulan]){
-      monthly[bulan] = {income:0, expense:0};
-    }
-
-    if(d.jenis==="income"){
-      income += d.jumlah;
-      monthly[bulan].income += d.jumlah;
-    } else {
-      expense += d.jumlah;
-      monthly[bulan].expense += d.jumlah;
-    }
-
-    list.innerHTML += `
-      <div class="item">
-        <div>
-          <b>${d.kategori}</b><br>
-          <span class="small">${d.tanggal}</span>
-        </div>
-        <div class="${d.jenis}">
-          Rp ${rupiah(d.jumlah)}
-          <br><button onclick="hapus(${i})">❌</button>
-        </div>
-      </div>
-    `;
-  });
-
-  // tampil ringkasan bulanan
-  let monthlyDiv = document.getElementById("monthly");
-  monthlyDiv.innerHTML = "";
-
-  Object.keys(monthly).sort().reverse().forEach(bulan=>{
-    monthlyDiv.innerHTML += `
-      <div class="summary-item">
-        <b>${bulan}</b><br>
-        <span class="income">Pemasukan: Rp ${rupiah(monthly[bulan].income)}</span><br>
-        <span class="expense">Pengeluaran: Rp ${rupiah(monthly[bulan].expense)}</span>
-      </div>
-    `;
-  });
-
-  document.getElementById("income").innerText = rupiah(income);
-  document.getElementById("expense").innerText = rupiah(expense);
-  document.getElementById("saldo").innerText = "Rp " + rupiah(income-expense);
-
-  chartUpdate(income, expense);
-}
+function rupiah(n){ return n.toLocaleString("id-ID"); }
+function save(){ localStorage.setItem("keuangan", JSON.stringify(data)); }
 
 function tambah(){
   let t=document.getElementById("tanggal").value;
@@ -198,20 +127,87 @@ function tambah(){
   render();
 }
 
-function hapus(i){
-  data.splice(i,1);
-  save();
-  render();
+function render(){
+  let income=0, expense=0;
+  let bulanSet=new Set();
+
+  data.forEach(d=>{
+    let bulan=d.tanggal.slice(0,7);
+    bulanSet.add(bulan);
+
+    if(d.jenis==="income") income+=d.jumlah;
+    else expense+=d.jumlah;
+  });
+
+  document.getElementById("income").innerText=rupiah(income);
+  document.getElementById("expense").innerText=rupiah(expense);
+  document.getElementById("saldo").innerText="Rp "+rupiah(income-expense);
+
+  // isi dropdown bulan
+  let select=document.getElementById("bulanSelect");
+  select.innerHTML="";
+  [...bulanSet].sort().reverse().forEach(b=>{
+    select.innerHTML+=`<option value="${b}">${b}</option>`;
+  });
+
+  chartMain(income, expense);
+  renderBulanan();
 }
 
-let chart;
+function renderBulanan(){
+  let bulan=document.getElementById("bulanSelect").value;
+  let list=document.getElementById("bulanList");
+  list.innerHTML="";
 
-function chartUpdate(income, expense){
-  let ctx=document.getElementById("chart");
-  if(chart) chart.destroy();
+  let income=0, expense=0;
 
-  chart=new Chart(ctx,{
+  data.filter(d=>d.tanggal.startsWith(bulan)).forEach((d,i)=>{
+    if(d.jenis==="income") income+=d.jumlah;
+    else expense+=d.jumlah;
+
+    list.innerHTML+=`
+      <div class="item">
+        <div>
+          <b>${d.kategori}</b><br>
+          <span class="small">${d.tanggal}</span>
+        </div>
+        <div class="${d.jenis}">
+          Rp ${rupiah(d.jumlah)}
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById("mIncome").innerText=rupiah(income);
+  document.getElementById("mExpense").innerText=rupiah(expense);
+
+  chartBulan(income, expense);
+}
+
+let mainChart, bulanChart;
+
+function chartMain(income, expense){
+  let ctx=document.getElementById("mainChart");
+  if(mainChart) mainChart.destroy();
+
+  mainChart=new Chart(ctx,{
     type:'doughnut',
+    data:{
+      labels:['Pemasukan','Pengeluaran'],
+      datasets:[{
+        data:[income,expense],
+        backgroundColor:['#2ecc71','#e74c3c']
+      }]
+    }
+  });
+}
+
+function chartBulan(income, expense){
+  let ctx=document.getElementById("bulanChart");
+  if(bulanChart) bulanChart.destroy();
+
+  bulanChart=new Chart(ctx,{
+    type:'bar',
     data:{
       labels:['Pemasukan','Pengeluaran'],
       datasets:[{
